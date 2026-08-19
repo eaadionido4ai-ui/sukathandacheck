@@ -1,0 +1,569 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>SUKAT-HANDA-Check | Capacity &amp; Upskilling Report Generator</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.2/babel.min.js"></script>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Segoe UI', system-ui, sans-serif; background: #e2e8f0; color: #0f2942; }
+  input, button, select, textarea { font-family: inherit; }
+  ::-webkit-scrollbar { width: 8px; }
+  ::-webkit-scrollbar-track { background: #e2e8f0; }
+  ::-webkit-scrollbar-thumb { background: #94a3b8; border-radius: 4px; }
+  .sheet { background: #fff; box-shadow: 0 6px 28px rgba(15,41,66,0.14); }
+  .sec { padding: 26px 40px; border-top: 1px solid #eef2f7; }
+  .eyebrow { font-size: 10px; font-weight: 800; letter-spacing: 2px; text-transform: uppercase; color: #1A6B8A; }
+  .h-sec { font-size: 17px; font-weight: 800; color: #0f2942; margin: 2px 0 14px; }
+  .app-root { display: flex; flex-direction: column; height: 100vh; }
+  .content-area { flex: 1; min-height: 0; display: flex; gap: 22px; width: 100%; max-width: 1180px; margin: 0 auto; padding: 0 20px; overflow: hidden; }
+  .editor-col { width: 440px; flex-shrink: 0; height: 100%; overflow-y: auto; padding: 22px 8px 40px 0; }
+  .report-col { flex: 1; min-width: 0; height: 100%; overflow-y: auto; padding: 22px 0 60px; }
+  @media print {
+    @page { size: A4; margin: 12mm; }
+    body { background: #fff !important; }
+    .no-print { display: none !important; }
+    .sheet { box-shadow: none !important; margin: 0 !important; max-width: none !important; width: 100% !important; }
+    .sec { padding: 16px 0; }
+    .app-root { height: auto !important; display: block !important; }
+    .content-area { overflow: visible !important; display: block !important; height: auto !important; max-width: none !important; padding: 0 !important; }
+    .report-col { overflow: visible !important; height: auto !important; padding: 0 !important; }
+    .avoid-break { break-inside: avoid; page-break-inside: avoid; }
+    .page-break { break-before: page; page-break-before: always; }
+    * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+  }
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+
+/* ===================== RATING SCALE (English) ===================== */
+const RATING = [
+  { value: 1, label: "None", color: "#C0392B" },
+  { value: 2, label: "Emerging", color: "#E67E22" },
+  { value: 3, label: "Developing", color: "#F1C40F" },
+  { value: 4, label: "Established", color: "#27AE60" },
+  { value: 5, label: "Leading", color: "#1A6B8A" },
+];
+const ratingInfo = (v) => RATING.find((r) => r.value === v) || null;
+
+/* ===================== TRAINING CATALOG (hazard-generic) ===================== */
+const COURSES = {
+  PSCP:   { seq: 1,  name: "PSCP / DRRM Orientation", provider: "Office of Civil Defense (OCD)", focus: "Public service continuity and DRRM fundamentals; the role of the CCT and DCG." },
+  ICS:    { seq: 2,  name: "Basic Incident Command System (ICS)", provider: "OCD", focus: "Incident command roles, span of control, and coordination during emergencies." },
+  SUCC:   { seq: 3,  name: "Succession & Alternates Roster Drill", provider: "Internal", focus: "Naming and briefing primary, 1st, 2nd and 3rd alternates; hand-over procedures." },
+  PLAN:   { seq: 4,  name: "PSCP Development & Review Workshop", provider: "OCD / internal", focus: "Drafting, completing, and periodically reviewing the continuity plan and its scope." },
+  SAFETY: { seq: 5,  name: "Basic Safety & Hazard Awareness", provider: "OCD / BFP", focus: "Hazard behavior, prevention, and safe first response in the workplace (any hazard)." },
+  EQUIP:  { seq: 6,  name: "Emergency Response Equipment Use", provider: "BFP / PRC", focus: "Selecting and operating response equipment (extinguishers, first-aid, PPE, alarms)." },
+  WARDEN: { seq: 7,  name: "Emergency Warden / Marshal Training", provider: "BFP", focus: "Floor sweep, headcount, assembly-area management, and warden duties." },
+  BLS:    { seq: 8,  name: "Basic First Aid / Basic Life Support (BLS)", provider: "Philippine Red Cross (PRC)", focus: "First aid and CPR; life-safety skills during an incident." },
+  DRILL:  { seq: 9,  name: "Building Familiarization & Evacuation Drill", provider: "Internal + building-coordinated", focus: "Primary/alternate routes, exits, alarms, and assembly points, reinforced by drills." },
+  REC:    { seq: 10, name: "Vital Records Management & Protection", provider: "Internal (COA-aligned)", focus: "Classifying vital records, backup status, and loss-of-records procedures." },
+  ITGRP:  { seq: 11, name: "IT & Records Continuity Team Setup", provider: "Internal / IT", focus: "Establishing a mandated group with defined roles for IT and records continuity." },
+  ITDR:   { seq: 12, name: "IT Disaster Recovery & Backup (RTO/RPO)", provider: "Internal / IT", focus: "Cloud/off-site replication and documented recovery time and point objectives." },
+  DPA:    { seq: 13, name: "Data Privacy in Disrupted Operations", provider: "NPC-aligned", focus: "Handling sensitive stakeholder data compliantly during disrupted operations." },
+  STK:    { seq: 14, name: "Stakeholder Exposure & Service-Continuity Mapping", provider: "Internal", focus: "Identifying exposed stakeholders and in-process transactions, and protecting service delivery." },
+  PFA:    { seq: 15, name: "Psychosocial First Aid (PFA)", provider: "DSWD / partner", focus: "Immediate psychosocial support for affected staff and stakeholders." },
+};
+
+/* ===================== DIMENSIONS & INDICATORS (hazard-generic) ===================== */
+/* Each dimension = a radar corner (theme). Its score is the average of its indicators. */
+const DIMS = [
+  { id: "D1", short: "Role Clarity", name: "Designation & Role Clarity within the PSCP", color: "#8B2FC9",
+    indicators: [
+      { id: "1.1", title: "Role clarity & succession depth", courses: ["PSCP", "ICS", "SUCC"], descriptors: [
+        "Participants cannot state their PSCP role; no awareness of the CCT / DCG structure; no alternates designated.",
+        "Roles known only informally; assigned on paper; alternates unnamed or unaware of their function.",
+        "Most can state their role; primaries identified; 1st alternates named but not consistently briefed.",
+        "Roles documented and understood; primary plus 1st/2nd alternates designated and briefed for most functions.",
+        "Full role clarity; primary plus alternates (to 3rd) named, trained and rehearsed; no single point of failure.",
+      ] },
+    ] },
+  { id: "D2", short: "Training & Drills", name: "Training & Drills", color: "#1A6B8A",
+    indicators: [
+      { id: "2.1", title: "Training", courses: ["PSCP", "ICS", "SAFETY", "BLS"], descriptors: [
+        "No relevant DRRM / emergency-response training attended by anyone present.",
+        "Isolated, ad hoc training for one or two staff; not aligned to roles.",
+        "Some staff trained in core response courses; coverage uneven across teams.",
+        "Key personnel and alternates trained across relevant courses; coverage tracked.",
+        "Comprehensive, role-aligned training refreshed regularly across all teams.",
+      ] },
+      { id: "2.2", title: "Drills", courses: ["DRILL", "WARDEN"], descriptors: [
+        "No drills conducted or on record.",
+        "Last drill unknown or more than two years ago.",
+        "A drill held within the past year, but not on a regular schedule.",
+        "Regular (at least annual) drills with recorded participation.",
+        "Frequent internal and coordinated drills (e.g. quarterly) with after-drill review.",
+      ] },
+    ] },
+  { id: "D3", short: "Safety & Infra", name: "Safety & Infrastructure Familiarity", color: "#C0392B",
+    indicators: [
+      { id: "3.1", title: "Safety familiarity", courses: ["SAFETY", "EQUIP", "WARDEN"], descriptors: [
+        "Staff unaware of safety-equipment locations, alarms, or safety officers / wardens.",
+        "Vague awareness of a single item (e.g. one alarm or exit) only.",
+        "Most know key safety equipment and the alarm; wardens / officers only partly known.",
+        "Safety equipment, alarms, and designated wardens / officers known by most.",
+        "Full familiarity; signage at every point; all staff know equipment, alarms, and named wardens per area.",
+      ] },
+      { id: "3.2", title: "Infrastructure familiarity", courses: ["DRILL", "WARDEN"], descriptors: [
+        "No knowledge of evacuation routes or exits.",
+        "Only the main exit is known; no alternate route.",
+        "Primary route known; alternate route only partly known.",
+        "Primary and alternate routes and exits known by most.",
+        "Full spatial familiarity with primary/alternate routes, exits, and layout, reinforced by drills.",
+      ] },
+    ] },
+  { id: "D4", short: "Records & IT", name: "Vital Records & IT Recovery Capacity", color: "#16A085",
+    indicators: [
+      { id: "4.1", title: "Dedicated IT / records continuity group", courses: ["ITGRP", "ICS"], descriptors: [
+        "No designated group or person responsible for IT / records continuity.",
+        "Responsibility is informal or ad hoc; no clear ownership.",
+        "A person or role is identified, but without a formal group or mandate.",
+        "A dedicated IT / records continuity group exists with defined roles.",
+        "A mandated group with documented responsibilities, drills, and vendor coordination.",
+      ] },
+      { id: "4.2", title: "Recovery / backup technology", courses: ["ITDR", "REC", "DPA"], descriptors: [
+        "No backup of vital files; loss would be permanent.",
+        "Occasional manual or local backups only; unverified.",
+        "Partial or selective backup; some off-site copies.",
+        "Cloud / off-site backup for most systems, with periodic verification.",
+        "Verified real-time off-site replication with documented RTO/RPO for all vital records.",
+      ] },
+    ] },
+  { id: "D5", short: "Stakeholders", name: "Stakeholder Service Exposure Awareness", color: "#D4550A",
+    indicators: [
+      { id: "5.1", title: "Stakeholder service exposure awareness", courses: ["STK", "REC"], descriptors: [
+        "No awareness of the volume or location of in-process stakeholder documents physically on the floor.",
+        "Rough guess only; no tracking of physical stakeholder documents at risk at any given time.",
+        "Approximate volumes known, with some sense of which processing stage the documents are at.",
+        "Documented count and stage of in-process stakeholder files maintained; physical exposure understood per day.",
+        "Real-time digital tracking of every in-process stakeholder file with intake duplication, so physical-only exposure is minimal.",
+      ] },
+    ] },
+  { id: "D6", short: "Plan & Coverage", name: "Plan Availability & Comprehensiveness", color: "#2E5FA9",
+    indicators: [
+      { id: "6.1", title: "Availability of the plan", courses: ["PSCP", "PLAN"], descriptors: [
+        "No continuity / PSCP plan exists.",
+        "A plan is being drafted or exists only informally.",
+        "A plan exists but is not readily accessible to those who need it.",
+        "An approved plan exists and is accessible to relevant personnel.",
+        "An approved plan is accessible, current, and version-controlled, with periodic review.",
+      ] },
+      { id: "6.2", title: "Level of comprehensiveness", courses: ["PLAN", "ICS"], descriptors: [
+        "No plan content to assess.",
+        "Plan covers only basic elements; major gaps (roles, MEFs, recovery objectives).",
+        "Plan covers core elements but lacks depth (e.g. no RTO/RPO or scenarios).",
+        "Plan covers roles, MEFs, recovery objectives, and key scenarios.",
+        "Comprehensive plan: MEFs, RTO/RPO, roles/alternates, scenarios, dependencies, and tested procedures.",
+      ] },
+    ] },
+  { id: "D7", short: "Preparedness", name: "Preparedness Protocols", color: "#B8338A",
+    indicators: [
+      { id: "7.1", title: "Availability of response equipment", courses: ["EQUIP", "BLS"], descriptors: [
+        "No response equipment available (e.g. first-aid, PPE, go-bags, alarms).",
+        "Minimal or expired equipment; not inventoried.",
+        "Some equipment available but incomplete or unevenly distributed.",
+        "Adequate, inventoried equipment accessible to relevant areas.",
+        "Complete, maintained, inventoried equipment, including provisions for vulnerable persons.",
+      ] },
+      { id: "7.2", title: "Familiarity with assembly point / evacuation center", courses: ["DRILL"], descriptors: [
+        "Staff do not know the assembly point or evacuation center.",
+        "Vague awareness; the location is not confirmed or signposted.",
+        "Most know the primary assembly point; the alternate is not known.",
+        "Primary and alternate assembly points / evacuation centers known by most.",
+        "All staff know primary/alternate assembly points and the routes to them, reinforced by drills.",
+      ] },
+    ] },
+];
+
+/* ===================== HELPERS ===================== */
+const TARGET = 4; // Established = functional competency benchmark
+const ALL_IND = DIMS.flatMap((d) => d.indicators.map((i) => ({ ...i, dimId: d.id, dimShort: d.short, dimName: d.name, color: d.color })));
+const round5 = (n) => Math.max(1, Math.min(5, Math.round(n)));
+const fmt = (n) => (n == null ? "—" : n.toFixed(2));
+const dimAvg = (dim, scores) => { const v = dim.indicators.map((i) => scores[i.id]).filter((x) => x); return v.length ? v.reduce((a, b) => a + b, 0) / v.length : null; };
+const overallAvg = (scores) => { const a = DIMS.map((d) => dimAvg(d, scores)).filter((x) => x != null); return a.length ? a.reduce((x, y) => x + y, 0) / a.length : null; };
+
+const buildNarrative = (scores) => {
+  const overall = overallAvg(scores);
+  if (overall == null) return null;
+  const band = ratingInfo(round5(overall));
+  const dimData = DIMS.map((d) => ({ d, avg: dimAvg(d, scores) })).filter((x) => x.avg != null);
+  const strongest = dimData.reduce((m, x) => (x.avg > m.avg ? x : m), dimData[0]);
+  const weakest = dimData.reduce((m, x) => (x.avg < m.avg ? x : m), dimData[0]);
+  const rated = ALL_IND.filter((i) => scores[i.id]);
+  const priority = rated.filter((i) => scores[i.id] < TARGET);
+  const established = rated.filter((i) => scores[i.id] >= TARGET);
+  const courseSet = new Set(); priority.forEach((i) => i.courses.forEach((c) => courseSet.add(c)));
+  const clause = { 1: "capacity is largely absent; foundational competency-building is needed before the team can be relied upon in an actual event.",
+    2: "capacity is emerging but informal; the team needs structured training and exercise to reach a functional standard.",
+    3: "capacity is developing — awareness exists but is not yet consistently exercised; targeted upskilling will close the gap.",
+    4: "capacity is established and functional; upskilling should now refresh skills and build depth and leadership.",
+    5: "capacity is leading; the team is positioned to mentor others and sustain continuous learning." }[band.value];
+  return [
+    `The assessed team attained an overall capacity score of ${overall.toFixed(2)} out of 5 — Band ${band.value}, ${band.label}. At this level, ${clause}`,
+    dimData.length > 1 && strongest.d.id !== weakest.d.id ? `Capacity is strongest in ${strongest.d.short} (${strongest.avg.toFixed(2)}) and most limited in ${weakest.d.short} (${weakest.avg.toFixed(2)}).` : `Scores are evenly distributed across the rated dimensions.`,
+    `Of ${rated.length} indicator${rated.length === 1 ? "" : "s"} rated, ${established.length} reached Established or Leading (4–5), while ${priority.length} fall below the benchmark and define a learning pathway of ${courseSet.size} recommended course${courseSet.size === 1 ? "" : "s"}.`,
+  ];
+};
+
+/* ===================== RADAR (7 dimension averages) ===================== */
+const RadarChart = ({ scores, size = 380 }) => {
+  const cx = size / 2, cy = size / 2, r = size * 0.34;
+  const n = DIMS.length;
+  const angles = DIMS.map((_, i) => (Math.PI * 2 * i) / n - Math.PI / 2);
+  const pt = (a, v) => ({ x: cx + r * (v / 5) * Math.cos(a), y: cy + r * (v / 5) * Math.sin(a) });
+  const poly = (vals) => angles.map((a, i) => `${pt(a, vals[i]).x},${pt(a, vals[i]).y}`).join(" ");
+  const vals = DIMS.map((d) => dimAvg(d, scores) || 0);
+  return (
+    <svg viewBox={`0 0 ${size} ${size}`} style={{ width: "100%", maxWidth: size }}>
+      {[1, 2, 3, 4, 5].map((lv) => <polygon key={lv} points={poly(Array(n).fill(lv))} fill="none" stroke={lv === 5 ? "#cbd5e1" : "#e2e8f0"} strokeWidth={lv === 5 ? 1.4 : 0.8} />)}
+      {angles.map((a, i) => <line key={i} x1={cx} y1={cy} x2={pt(a, 5).x} y2={pt(a, 5).y} stroke={DIMS[i].color} strokeWidth={1.1} strokeDasharray="4,3" opacity={0.5} />)}
+      {[1, 2, 3, 4, 5].map((lv) => <text key={lv} x={pt(angles[0], lv).x + 4} y={pt(angles[0], lv).y - 3} fontSize={7} fill="#94a3b8">{lv}</text>)}
+      {vals.some((v) => v > 0) && (
+        <>
+          <polygon points={poly(vals)} fill="rgba(26,107,138,0.18)" stroke="#1A6B8A" strokeWidth={2} />
+          {vals.map((v, i) => v > 0 && <circle key={i} cx={pt(angles[i], v).x} cy={pt(angles[i], v).y} r={4} fill={DIMS[i].color} stroke="#fff" strokeWidth={1.4} />)}
+          {vals.map((v, i) => v > 0 && <text key={"s" + i} x={pt(angles[i], v).x} y={pt(angles[i], v).y - 7} textAnchor="middle" fontSize={8} fontWeight="800" fill={DIMS[i].color}>{v.toFixed(1)}</text>)}
+        </>
+      )}
+      {DIMS.map((d, i) => {
+        const lp = { x: cx + (r + 32) * Math.cos(angles[i]), y: cy + (r + 32) * Math.sin(angles[i]) };
+        return <text key={d.id} x={lp.x} y={lp.y} textAnchor="middle" dominantBaseline="middle" fontSize={8.5} fontWeight="700" fill={d.color}>{d.short}</text>;
+      })}
+      <text x={cx} y={cy} textAnchor="middle" dominantBaseline="middle" fontSize={8} fill="#94a3b8">SUKAT</text>
+    </svg>
+  );
+};
+
+/* ===================== SMALL UI ===================== */
+const ScorePill = ({ value }) => {
+  const info = value ? ratingInfo(value) : null;
+  return <span style={{ display: "inline-flex", alignItems: "center", gap: 5, background: info ? info.color : "#e2e8f0", color: info ? "#fff" : "#94a3b8", borderRadius: 6, padding: "2px 8px", fontSize: 11, fontWeight: 800, whiteSpace: "nowrap" }}>{value || "—"}{info && <span style={{ fontSize: 8, fontWeight: 700, opacity: 0.95 }}>{info.label}</span>}</span>;
+};
+const EditButton = ({ value, selected, color, onClick }) => (
+  <button onClick={onClick} style={{ width: 32, height: 28, borderRadius: 6, cursor: "pointer", border: selected ? `2px solid ${color}` : "1.5px solid #e2e8f0", background: selected ? color : "#f8fafc", color: selected ? "#fff" : "#64748b", fontSize: 12.5, fontWeight: 800, padding: 0 }}>{value}</button>
+);
+const CoursePill = ({ id }) => { const c = COURSES[id]; return <span style={{ display: "inline-block", fontSize: 10, fontWeight: 700, color: "#1A6B8A", background: "#1A6B8A12", border: "1px solid #1A6B8A33", borderRadius: 5, padding: "2px 7px", marginRight: 5, marginBottom: 4 }}>{c.name}</span>; };
+
+/* ===================== SCORE EDITOR ===================== */
+function ScoreEditor({ scores, setScore, info, setInfo, clearAll, remarks, setRemark }) {
+  const fields = [["organization", "Organization / Office"], ["address", "Office Address"], ["drillType", "Type of Drill Assessed"], ["date", "Date of Assessment"], ["assessor", "Assessed by (Facilitator)"], ["facilitatorPosition", "Facilitator Position / Designation"], ["affiliation", "Facilitator's Affiliation"]];
+  return (
+    <div style={{ background: "#fff", borderRadius: 12, padding: 18, boxShadow: "0 1px 3px rgba(0,0,0,0.06)" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+        <div style={{ fontSize: 13, fontWeight: 800 }}>Assessment inputs</div>
+        <button onClick={clearAll} style={{ fontSize: 11, fontWeight: 700, color: "#C0392B", background: "transparent", border: "1px solid #f1d4cf", borderRadius: 6, padding: "5px 10px", cursor: "pointer" }}>Clear all</button>
+      </div>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(180px,1fr))", gap: 10, marginBottom: 16 }}>
+        {fields.map(([k, l]) => (
+          <div key={k}>
+            <label style={{ fontSize: 9, fontWeight: 700, color: "#94a3b8", textTransform: "uppercase", letterSpacing: 1, display: "block", marginBottom: 3 }}>{l}</label>
+            <input value={info[k]} onChange={(e) => setInfo({ ...info, [k]: e.target.value })} placeholder={l.toLowerCase()} style={{ width: "100%", padding: "7px 9px", border: "1px solid #e2e8f0", borderRadius: 6, fontSize: 12 }} />
+          </div>
+        ))}
+      </div>
+      {DIMS.map((d) => (
+        <div key={d.id} style={{ padding: "9px 0", borderBottom: "1px solid #f1f5f9" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 5 }}>
+            <span style={{ fontSize: 9, fontWeight: 800, color: "#fff", background: d.color, borderRadius: 4, padding: "2px 6px", flexShrink: 0 }}>{d.id}</span>
+            <span style={{ fontSize: 12, fontWeight: 800, color: "#0f2942" }}>{d.short}</span>
+          </div>
+          {d.indicators.map((ind) => (
+            <div key={ind.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "3px 0 3px 6px" }}>
+              <span style={{ fontSize: 9.5, fontWeight: 700, color: "#94a3b8", width: 24, flexShrink: 0 }}>{ind.id}</span>
+              <span style={{ flex: 1, fontSize: 11, color: "#374151", minWidth: 0 }}>{ind.title}</span>
+              <div style={{ display: "flex", gap: 3, flexShrink: 0 }}>
+                {[1, 2, 3, 4, 5].map((v) => <EditButton key={v} value={v} color={d.color} selected={scores[ind.id] === v} onClick={() => setScore(ind.id, scores[ind.id] === v ? null : v)} />)}
+              </div>
+            </div>
+          ))}
+          <textarea value={remarks[d.id] || ""} onChange={(e) => setRemark(d.id, e.target.value)} placeholder="Remarks / justification — note hazard-specific details (e.g. fire) here" rows={2} style={{ width: "100%", marginTop: 6, padding: "6px 8px", border: "1px solid #e2e8f0", borderRadius: 6, fontSize: 11, resize: "vertical", fontFamily: "inherit" }} />
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/* ===================== REPORT SECTIONS ===================== */
+function ReportCover({ info, overall }) {
+  const band = overall != null ? ratingInfo(round5(overall)) : null;
+  const meta = [["Organization / office", info.organization], ["Office address", info.address], ["Type of drill assessed", info.drillType], ["Date", info.date], ["Assessed by", info.assessor], ["Facilitator position", info.facilitatorPosition], ["Affiliation", info.affiliation]];
+  return (
+    <div style={{ background: "linear-gradient(135deg, #0f2942 0%, #1A3A5C 55%, #1A6B8A 100%)", color: "#fff", padding: "30px 40px 26px" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: 16 }}>
+        <div style={{ maxWidth: 560 }}>
+          <div style={{ fontSize: 10, fontWeight: 800, letterSpacing: 2, color: "#7dd3fc", textTransform: "uppercase" }}>UPRI — DRRM Capacity &amp; Upskilling</div>
+          <h1 style={{ margin: "6px 0 2px", fontSize: 26, fontWeight: 800, letterSpacing: -0.5 }}>Capacity &amp; Upskilling Report</h1>
+          <div style={{ fontSize: 14, fontWeight: 700, color: "#7dd3fc" }}>SUKAT-HANDA-Check</div>
+          <p style={{ margin: "8px 0 0", fontSize: 10.5, color: "#9fc7da", fontStyle: "italic", lineHeight: 1.5 }}>Survey and Upskilling-oriented Knowledge Assessment Tool for Handling Hazard-specific Adversities through a Scoring Checklist</p>
+        </div>
+        {band && (
+          <div style={{ textAlign: "center", background: "rgba(255,255,255,0.12)", border: "1px solid rgba(125,211,252,0.4)", borderRadius: 12, padding: "14px 20px", minWidth: 150 }}>
+            <div style={{ fontSize: 9, letterSpacing: 1.5, textTransform: "uppercase", color: "#7dd3fc" }}>Overall capacity</div>
+            <div style={{ fontSize: 44, fontWeight: 800, lineHeight: 1.05 }}>{overall.toFixed(2)}</div>
+            <div style={{ fontSize: 12, fontWeight: 700, color: "#7dd3fc" }}>Band {band.value} · {band.label}</div>
+          </div>
+        )}
+      </div>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(140px,1fr))", gap: 10, marginTop: 22, borderTop: "1px solid rgba(255,255,255,0.18)", paddingTop: 16 }}>
+        {meta.map(([l, v]) => <div key={l}><div style={{ fontSize: 9, fontWeight: 700, letterSpacing: 1, textTransform: "uppercase", color: "#7dd3fc", marginBottom: 2 }}>{l}</div><div style={{ fontSize: 12.5, fontWeight: 600 }}>{v || "—"}</div></div>)}
+      </div>
+    </div>
+  );
+}
+
+function ExecutiveSummary({ scores }) {
+  const n = buildNarrative(scores);
+  if (!n) return null;
+  return (
+    <div className="sec avoid-break">
+      <div className="eyebrow">01 — Executive summary</div>
+      <div className="h-sec">Capacity standing and development focus</div>
+      {n.map((p, i) => <p key={i} style={{ fontSize: 12.5, color: "#334155", lineHeight: 1.7, marginBottom: 9 }}>{p}</p>)}
+    </div>
+  );
+}
+
+function CapacityProfile({ scores }) {
+  return (
+    <div className="sec avoid-break">
+      <div className="eyebrow">02 — Capacity profile</div>
+      <div className="h-sec">Seven-dimension profile (dimension score = average of its indicators)</div>
+      <div style={{ display: "flex", gap: 26, flexWrap: "wrap", alignItems: "center" }}>
+        <div style={{ flex: "0 0 auto", width: 360, margin: "0 auto" }}><RadarChart scores={scores} /></div>
+        <div style={{ flex: 1, minWidth: 300 }}>
+          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
+            <thead><tr style={{ background: "#0f2942", color: "#fff" }}>
+              <th style={{ textAlign: "left", padding: "8px 10px", fontSize: 11 }}>Dimension</th>
+              <th style={{ padding: "8px 10px", fontSize: 11, width: 64 }}>Score</th>
+              <th style={{ textAlign: "left", padding: "8px 10px", fontSize: 11, width: 110 }}>Level</th>
+            </tr></thead>
+            <tbody>
+              {DIMS.map((d, i) => {
+                const avg = dimAvg(d, scores); const b = avg != null ? ratingInfo(round5(avg)) : null;
+                return (
+                  <tr key={d.id} style={{ background: i % 2 ? "#f8fafc" : "#fff" }}>
+                    <td style={{ padding: "7px 10px", borderLeft: `3px solid ${d.color}` }}><span style={{ fontWeight: 700, color: "#0f2942" }}>{d.short}</span></td>
+                    <td style={{ padding: "7px 10px", textAlign: "center", fontWeight: 800, color: avg != null ? d.color : "#cbd5e1" }}>{fmt(avg)}</td>
+                    <td style={{ padding: "7px 10px" }}>{b ? <span style={{ fontSize: 11, fontWeight: 700, color: b.color }}>{b.label}</span> : "—"}</td>
+                  </tr>
+                );
+              })}
+              <tr style={{ borderTop: "2px solid #0f2942" }}>
+                <td style={{ padding: "9px 10px", fontWeight: 800 }}>Overall capacity score</td>
+                <td style={{ padding: "9px 10px", textAlign: "center", fontWeight: 800 }}>{fmt(overallAvg(scores))}</td>
+                <td style={{ padding: "9px 10px" }}>{overallAvg(scores) != null ? (() => { const b = ratingInfo(round5(overallAvg(scores))); return <span style={{ fontSize: 11, fontWeight: 700, color: b.color }}>{b.label}</span>; })() : "—"}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function Findings({ scores, remarks }) {
+  return (
+    <div className="sec">
+      <div className="eyebrow">03 — Findings by dimension</div>
+      <div className="h-sec">Indicator-level results and achieved descriptors</div>
+      {DIMS.map((d) => {
+        const avg = dimAvg(d, scores); const b = avg != null ? ratingInfo(round5(avg)) : null;
+        return (
+          <div key={d.id} className="avoid-break" style={{ padding: "11px 0", borderBottom: "1px solid #f1f5f9" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6, borderLeft: `4px solid ${d.color}`, paddingLeft: 10 }}>
+              <span style={{ fontSize: 10, fontWeight: 800, color: "#fff", background: d.color, borderRadius: 4, padding: "2px 7px" }}>{d.id}</span>
+              <span style={{ fontSize: 13, fontWeight: 800, color: "#0f2942", flex: 1 }}>{d.name}</span>
+              <span style={{ fontSize: 18, fontWeight: 800, color: avg != null ? d.color : "#cbd5e1" }}>{fmt(avg)}</span>
+              {b && <span style={{ fontSize: 10, fontWeight: 700, color: b.color }}>{b.label}</span>}
+            </div>
+            {d.indicators.map((ind) => {
+              const v = scores[ind.id];
+              return (
+                <div key={ind.id} style={{ padding: "5px 0 5px 14px" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 2 }}>
+                    <span style={{ fontSize: 10, fontWeight: 800, color: d.color }}>{ind.id}</span>
+                    <span style={{ fontSize: 11.5, fontWeight: 700, color: "#0f2942", flex: 1 }}>{ind.title}</span>
+                    <ScorePill value={v} />
+                  </div>
+                  <p style={{ fontSize: 10.5, color: v ? "#334155" : "#cbd5e1", lineHeight: 1.5, fontStyle: v ? "normal" : "italic" }}>{v ? ind.descriptors[v - 1] : "Not yet rated."}</p>
+                </div>
+              );
+            })}
+            {remarks[d.id] && <p style={{ fontSize: 10.5, color: "#475569", lineHeight: 1.5, marginTop: 6, marginLeft: 14, paddingLeft: 8, borderLeft: `2px solid ${d.color}` }}><span style={{ fontWeight: 700, color: "#0f2942" }}>Remarks: </span><span style={{ fontStyle: "italic" }}>{remarks[d.id]}</span></p>}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function UpskillingPlan({ scores }) {
+  const priority = ALL_IND.filter((i) => scores[i.id] && scores[i.id] < TARGET).sort((a, b) => scores[a.id] - scores[b.id]);
+  if (priority.length === 0) return (
+    <div className="sec avoid-break"><div className="eyebrow">04 — Upskilling plan</div><div className="h-sec">Targeted training to close competency gaps</div>
+      <p style={{ fontSize: 12, color: "#27AE60", fontWeight: 600 }}>All rated indicators are at or above the Established benchmark. Focus on refresher cycles, drill leadership, and mentoring peers toward Leading.</p></div>
+  );
+  return (
+    <div className="sec avoid-break">
+      <div className="eyebrow">04 — Upskilling plan</div>
+      <div className="h-sec">Targeted training to close competency gaps</div>
+      <p style={{ fontSize: 11, color: "#64748b", marginBottom: 14, lineHeight: 1.6 }}>For each indicator below the Established benchmark (4), the plan names recommended courses and the competency outcome they build. The development goal for every priority indicator is at least Established — functional, exercised capability.</p>
+      <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11.5 }}>
+        <thead><tr style={{ background: "#0f2942", color: "#fff" }}>
+          <th style={{ textAlign: "left", padding: "8px 10px", fontSize: 10.5, width: 190 }}>Indicator</th>
+          <th style={{ padding: "8px 10px", fontSize: 10.5, width: 56 }}>Now</th>
+          <th style={{ padding: "8px 10px", fontSize: 10.5, width: 64 }}>Goal</th>
+          <th style={{ textAlign: "left", padding: "8px 10px", fontSize: 10.5 }}>Recommended training &amp; competency outcome</th>
+        </tr></thead>
+        <tbody>
+          {priority.map((ind, i) => (
+            <tr key={ind.id} className="avoid-break" style={{ background: i % 2 ? "#f8fafc" : "#fff", verticalAlign: "top" }}>
+              <td style={{ padding: "9px 10px", borderLeft: `3px solid ${ind.color}` }}><div style={{ fontSize: 9, fontWeight: 700, color: ind.color }}>{ind.dimId} · {ind.id}</div><div style={{ fontWeight: 700, color: "#0f2942" }}>{ind.title}</div><div style={{ fontSize: 9, color: "#94a3b8" }}>{ind.dimShort}</div></td>
+              <td style={{ padding: "9px 10px", textAlign: "center" }}><ScorePill value={scores[ind.id]} /></td>
+              <td style={{ padding: "9px 10px", textAlign: "center" }}><ScorePill value={TARGET} /></td>
+              <td style={{ padding: "9px 10px" }}>
+                <div style={{ marginBottom: 5 }}>{ind.courses.map((c) => <CoursePill key={c} id={c} />)}</div>
+                <div style={{ fontSize: 10.5, color: "#334155", lineHeight: 1.5 }}>Outcome: {ind.descriptors[TARGET - 1]}</div>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function LearningPathway({ scores }) {
+  const priority = ALL_IND.filter((i) => scores[i.id] && scores[i.id] < TARGET);
+  if (priority.length === 0) return null;
+  const ids = new Set(); priority.forEach((i) => i.courses.forEach((c) => ids.add(c)));
+  const ordered = [...ids].sort((a, b) => COURSES[a].seq - COURSES[b].seq);
+  const strengthens = (cid) => [...new Set(priority.filter((i) => i.courses.includes(cid)).map((i) => i.dimId))].join(", ");
+  return (
+    <div className="sec page-break">
+      <div className="eyebrow">05 — Priority learning pathway</div>
+      <div className="h-sec">Recommended sequence of {ordered.length} course{ordered.length === 1 ? "" : "s"}</div>
+      <p style={{ fontSize: 11, color: "#64748b", marginBottom: 16, lineHeight: 1.6 }}>Courses are sequenced from foundational to specialized. Each step shows the provider and which dimension(s) it strengthens. Complete the pathway to lift the priority indicators to the Established benchmark.</p>
+      {ordered.map((cid, i) => {
+        const c = COURSES[cid];
+        return (
+          <div key={cid} className="avoid-break" style={{ display: "flex", gap: 14, padding: "11px 0", borderBottom: "1px solid #f1f5f9" }}>
+            <div style={{ flexShrink: 0, width: 30, height: 30, borderRadius: "50%", background: "#1A6B8A", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13, fontWeight: 800 }}>{i + 1}</div>
+            <div style={{ flex: 1 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", flexWrap: "wrap", gap: 8 }}>
+                <span style={{ fontSize: 13, fontWeight: 800, color: "#0f2942" }}>{c.name}</span>
+                <span style={{ fontSize: 10, fontWeight: 700, color: "#fff", background: "#0f2942", borderRadius: 5, padding: "2px 8px", alignSelf: "flex-start" }}>Strengthens {strengthens(cid)}</span>
+              </div>
+              <div style={{ fontSize: 10, color: "#94a3b8", fontStyle: "italic" }}>{c.provider}</div>
+              <p style={{ fontSize: 11, color: "#334155", lineHeight: 1.55, marginTop: 3 }}>{c.focus}</p>
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function ScaleAndMethod() {
+  return (
+    <div className="sec avoid-break">
+      <div className="eyebrow">06 — Rating scale and method</div>
+      <div className="h-sec">How to read this report</div>
+      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 14 }}>
+        {RATING.map((r) => <div key={r.value} style={{ display: "flex", alignItems: "center", gap: 7, background: `${r.color}12`, borderRadius: 7, padding: "7px 11px", border: `1px solid ${r.color}30` }}><span style={{ fontSize: 17, fontWeight: 800, color: r.color }}>{r.value}</span><div style={{ fontSize: 11, fontWeight: 800, color: r.color }}>{r.label}</div></div>)}
+      </div>
+      <p style={{ fontSize: 10.5, color: "#64748b", lineHeight: 1.6 }}>Each indicator is scored 1–5 against the descriptors in this report; a dimension's score is the mean of its indicators, and the overall capacity score is the mean of the rated dimensions. The Established level (4) is the functional competency benchmark used to flag upskilling needs. Dimensions and indicators are hazard-generic; hazard-specific details (e.g. fire, earthquake) are captured per dimension in the remarks. Scores reflect the evidence available at the time of assessment and are intended to guide upskilling, not to rank individuals.</p>
+    </div>
+  );
+}
+
+function SignatureBlock({ info }) {
+  const line = (label, name) => <div style={{ flex: 1, minWidth: 220 }}><div style={{ height: 32 }} /><div style={{ borderTop: "1px solid #0f2942", paddingTop: 5 }}><div style={{ fontSize: 12, fontWeight: 700 }}>{name || "\u00A0"}</div><div style={{ fontSize: 10, color: "#94a3b8", textTransform: "uppercase", letterSpacing: 1 }}>{label}</div></div></div>;
+  return (
+    <div className="sec avoid-break">
+      <div style={{ display: "flex", gap: 40, flexWrap: "wrap" }}>{line("Assessed / facilitated by", info.assessor)}{line("Acknowledged by (organization representative)", "")}</div>
+      <p style={{ fontSize: 9, color: "#94a3b8", marginTop: 22, lineHeight: 1.5 }}>Generated with the SUKAT-HANDA-Check capacity &amp; upskilling report generator · UP Resilience Institute. Intended for the upskilling and capacity-building use of the assessed team and its facilitators.</p>
+    </div>
+  );
+}
+
+/* ===================== APP ===================== */
+const DEMO_SCORES = { "1.1": 3, "2.1": 2, "2.2": 2, "3.1": 3, "3.2": 3, "4.1": 2, "4.2": 2, "5.1": 2, "6.1": 3, "6.2": 2, "7.1": 2, "7.2": 3 };
+const DEMO_REMARKS = { D2: "Hazard tested this cycle: fire. Only 2 of 9 members have attended Basic Fire Safety; last fire drill was ~18 months ago.", D4: "Records confirmed on-site; cloud backup unverified for physical loan folders; no formal IT continuity group.", D7: "First-aid and go-bags at reception only; ground-floor lobby known as assembly point, alternate not confirmed." };
+const today = () => new Date().toLocaleDateString("en-PH", { year: "numeric", month: "long", day: "numeric" });
+
+function App() {
+  const [scores, setScores] = React.useState({});
+  const [remarks, setRemarks] = React.useState({});
+  const [info, setInfo] = React.useState({ organization: "", address: "", drillType: "", date: "", assessor: "", facilitatorPosition: "", affiliation: "" });
+  const [showEditor, setShowEditor] = React.useState(true);
+  const fileRef = React.useRef(null);
+  const setScore = (id, val) => setScores((p) => { const n = { ...p }; if (val == null) delete n[id]; else n[id] = val; return n; });
+  const setRemark = (id, val) => setRemarks((p) => { const n = { ...p }; if (!val) delete n[id]; else n[id] = val; return n; });
+  const overall = overallAvg(scores);
+  const ratedCount = Object.keys(scores).length;
+
+  const loadDemo = () => { setScores(DEMO_SCORES); setRemarks(DEMO_REMARKS); setInfo({ organization: "Small Business Corporation (SB Corp)", address: "139 Corporate Center, Valero St., Salcedo Village, Makati City (17F–18F)", drillType: "Fire Incident TTX — office hours (17F/18F)", date: today(), assessor: "UPRI–NOAH Facilitator", facilitatorPosition: "DRRM Facilitator / Instrument Designer", affiliation: "UP Resilience Institute (UPRI) — UP NOAH Center" }); };
+  const clearAll = () => { setScores({}); setRemarks({}); setInfo({ organization: "", address: "", drillType: "", date: "", assessor: "", facilitatorPosition: "", affiliation: "" }); };
+  const exportJSON = () => {
+    const blob = new Blob([JSON.stringify({ tool: "SUKAT-HANDA-Check", model: "7-dimension / 12-indicator (hazard-generic)", generated: new Date().toISOString(), respondentInfo: info, scores, remarks }, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob); const a = document.createElement("a");
+    a.href = url; a.download = `SUKAT-HANDA_Upskilling_${(info.organization || "assessment").replace(/[^a-z0-9]+/gi, "_")}.json`; a.click(); URL.revokeObjectURL(url);
+  };
+  const importJSON = (e) => {
+    const f = e.target.files[0]; if (!f) return; const reader = new FileReader();
+    reader.onload = () => { try { const d = JSON.parse(reader.result); if (d.scores) setScores(d.scores); if (d.remarks) setRemarks(d.remarks); if (d.respondentInfo) setInfo({ organization: "", address: "", drillType: "", date: "", assessor: "", facilitatorPosition: "", affiliation: "", ...d.respondentInfo }); } catch { alert("That file could not be read. Expected a JSON file with a 'scores' object keyed by indicator (e.g. 2.1)."); } };
+    reader.readAsText(f); e.target.value = "";
+  };
+  const btn = (bg, color, border) => ({ padding: "9px 14px", borderRadius: 8, border: border || "none", background: bg, color, cursor: "pointer", fontSize: 12, fontWeight: 700 });
+
+  return (
+    <div className="app-root">
+      <div className="no-print" style={{ background: "#0f2942", padding: "12px 20px", display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap", boxShadow: "0 2px 10px rgba(0,0,0,0.2)", flexShrink: 0, zIndex: 10 }}>
+        <div style={{ color: "#fff", fontSize: 13, fontWeight: 800, marginRight: "auto" }}>SUKAT-HANDA-Check <span style={{ color: "#7dd3fc", fontWeight: 600 }}>· Capacity &amp; Upskilling Report</span></div>
+        <span style={{ color: "#9fc7da", fontSize: 11 }}>{ratedCount}/{ALL_IND.length} indicators rated</span>
+        <button onClick={() => setShowEditor((s) => !s)} style={btn("#1A6B8A", "#fff")}>{showEditor ? "Hide" : "Edit"} scores</button>
+        <button onClick={loadDemo} style={btn("transparent", "#7dd3fc", "1px solid #1A6B8A")}>Load demo</button>
+        <button onClick={() => fileRef.current.click()} style={btn("transparent", "#fff", "1px solid #2c5a7a")}>Import results</button>
+        <button onClick={exportJSON} style={btn("transparent", "#fff", "1px solid #2c5a7a")}>Export results</button>
+        <button onClick={() => window.print()} style={btn("#7dd3fc", "#0f2942")}>Print / Save PDF</button>
+        <input ref={fileRef} type="file" accept="application/json" onChange={importJSON} style={{ display: "none" }} />
+      </div>
+      <div className="content-area">
+        {showEditor && <div className="no-print editor-col"><ScoreEditor scores={scores} setScore={setScore} info={info} setInfo={setInfo} clearAll={clearAll} remarks={remarks} setRemark={setRemark} /></div>}
+        <div className="report-col">
+        <div className="sheet" style={{ width: "100%", maxWidth: 900, borderRadius: 4, overflow: "hidden", margin: "0 auto" }}>
+          <ReportCover info={info} overall={overall} />
+          {ratedCount === 0 ? (
+            <div style={{ padding: "60px 40px", textAlign: "center" }}>
+              <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 6 }}>No scores yet</div>
+              <p style={{ fontSize: 12.5, color: "#64748b", lineHeight: 1.6, maxWidth: 460, margin: "0 auto" }}>Rate the indicators in the editor, import a results file, or load the demo. The report and the upskilling plan build themselves as you score.</p>
+              <button className="no-print" onClick={loadDemo} style={{ ...btn("#1A6B8A", "#fff"), marginTop: 16 }}>Load demo data</button>
+            </div>
+          ) : (
+            <>
+              <ExecutiveSummary scores={scores} />
+              <CapacityProfile scores={scores} />
+              <Findings scores={scores} remarks={remarks} />
+              <UpskillingPlan scores={scores} />
+              <LearningPathway scores={scores} />
+              <ScaleAndMethod />
+              <SignatureBlock info={info} />
+            </>
+          )}
+        </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+</script>
+</body>
+</html>
